@@ -1,7 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { describe, expect, test } from '@jest/globals';
-import { TFEventStreamParser, TFEventStreamIterator} from '../index';
+import { TFEventStreamParser, TFEventStreamIterator, ScalarsIterator} from '../index';
 
 describe("EventFileIterator", () => {
     test("Load a basic file", async () => {
@@ -40,3 +40,29 @@ describe("EventStream", () => {
     })
 
 });
+
+describe("Can obtain scalars from files", () => {
+    test("Simple scalar loading", async () => {
+        let file = createReadStream("src/__tests__/assets/events.out.tfevents.1687811641.v2");
+        let stream = Readable.toWeb(file) as ReadableStream<Uint8Array>;
+
+        let iter = ScalarsIterator(TFEventStreamIterator(stream));
+        for await (let scalar of iter) {
+            console.log(scalar);
+        }
+    })
+
+    test("Can load from a in the wild file", async () => {
+        let file = await fetch("https://huggingface.co/marieke93/MiniLM-evidence-types/resolve/main/runs/bs32_lr2e-5/events.out.tfevents.1654626971.968b1e06c6a3.78.28")
+        let stream = file.body;
+
+        if (stream === null) {
+            throw new Error("Stream is null");
+        }
+
+        let iter = ScalarsIterator(TFEventStreamIterator(stream));
+        for await (let scalar of iter) {
+            console.log(scalar);
+        }
+    })
+})

@@ -1,4 +1,34 @@
 import { Event } from "./proto/event";
+import { ScalarPluginData } from "./proto/plugins/scalar/plugin_data";
+import { Summary } from "./proto/summary";
+
+interface ScalarsIteratorResult {
+    step: number,
+    tag: string,
+    value: number,
+}
+
+// Takes a stream of `Events` and parses data in a simpler format for building plots, etc.
+export async function* ScalarsIterator (events: AsyncGenerator<Event>) : AsyncGenerator<ScalarsIteratorResult> {
+    for await (let event of events) {
+        if (event.what.oneofKind != "summary") {
+            continue;
+        }
+
+        let summary: Summary = event.what.summary;
+        let value = summary.value[0];
+
+        if (value.value.oneofKind != "simpleValue") {
+            continue;
+        }
+
+        yield {
+            "step" : Number(event.step),
+            "tag": value.tag,
+            "value": value.value.simpleValue,
+        }
+    }
+}
 
 // Returns an async iterator that yields `Event` objects from a tfevents file stream.
 export async function* TFEventStreamIterator (stream: ReadableStream<Uint8Array>) : AsyncGenerator<Event> {
