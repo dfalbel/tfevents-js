@@ -1,26 +1,62 @@
 import { Event } from "./proto/event";
 
-export class EventFileIterator implements AsyncIterator<Event> {
-    constructor(file: File) {
-        this.file = file;
-    }
+// Returns an async iterator that yields `Event` objects from a tfevents file stream.
+export async function* TFEventStreamIterator (stream: ReadableStream<Uint8Array>) : AsyncGenerator<Event> {
 
-    private file: File;
-    private position: number = 0;
-    
-    public async next(): Promise<IteratorResult<Event>> {
-        
-        let buf = await this.file.slice(this.position, this.position + 8).arrayBuffer();
-        this.position += 8 + 4;
+    const reader = stream.pipeThrough(TFEventStreamParser()).getReader();
 
-        let view = new DataView(buf);
-        let size = view.getBigUint64(0, true);
+    do {
+        var {done, value} = await reader.read();
 
-        buf = await this.file.slice(this.position, this.position + Number(size)).arrayBuffer();
-        this.position += Number(size) + 4;
-        return {
-            done: this.position === this.file.size,
-            value: Event.fromBinary(new Uint8Array(buf))
-        };
-    }
+        if (value === undefined) {
+            break;
+        }
+
+        for (var event of value) {
+            yield event;
+        }
+
+    } while(!done);
+}
+
+// Returns a `TransformStream` that converts a stream from a tfevents file and parses it into `Event` objects.
+// Mostly for lower level control. In general you would use `TFEventStreamIterator` instead.
+export function TFEventStreamParser () {
+    let remainder = new Uint8Array(0);
+
+    return new TransformStream<Uint8Array, Event[]>({
+        transform(chunk: Uint8Array, controller) {
+            
+            if (remainder.length > 0) {
+                chunk = Buffer.concat([remainder, chunk]);
+                remainder = new Uint8Array(0);
+            }
+
+            let pos = 0;
+            let events = [];
+
+            do {
+                // check if can read the length, if we can't then we need to wait for more data
+                if (pos + 8 > chunk.length) {
+                    remainder = chunk;
+                    break;
+                }
+
+                let length = Buffer.from(chunk.subarray(pos, pos+8)).readBigInt64LE(0);
+
+                // check if we can read the whole event, if we can't then we need to wait for more data
+                let messageLength =  8 + 4 + Number(length) + 4;
+                if (pos + messageLength > chunk.length) {
+                    remainder = chunk;
+                    break;
+                }
+
+                events.push(Event.fromBinary(chunk.subarray(pos + 12, pos + 12 + Number(length))));
+                pos += messageLength;
+
+            } while (pos < chunk.length);
+            
+            controller.enqueue(events);
+        }
+    });
 }

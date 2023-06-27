@@ -2,8 +2,8 @@
   "dependencies": {
     "@protobuf-ts/plugin": "^2.9.0"
   },
-  "name": "tfevents",
-  "version": "1.0.0",
+  "name": "@dfalbel/tfevents",
+  "version": "0.0.1",
   "main": "index.js",
   "devDependencies": {
     "@jest/globals": "^29.5.0",
@@ -14,8 +14,12 @@
   "scripts": {
     "test": "npx jest --config jestconfig.json",
     "proto": "npx protoc --ts_out ./src/proto/ --proto_path protos protos/*.proto protos/plugins/**/*.proto",
-    "build": "npm run proto && tsc"
+    "build": "npm run proto && tsc",
+    "prepublishOnly": "npm run build"
   },
+  "files": [
+    "/lib"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
