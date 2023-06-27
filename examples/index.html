@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script src="../dist/bundle.js"></script>
+<script type="module">
+    let file = await fetch("https://huggingface.co/marieke93/MiniLM-evidence-types/resolve/main/runs/bs32_lr2e-5/events.out.tfevents.1654626971.968b1e06c6a3.78.28");
+    let iter = tfevents.ScalarsIterator(tfevents.TFEventStreamIterator(file.body));
+    let data = []
+    
+    for await (const event of iter) {
+        if (event.tag == "train/loss") {
+            data.push(event);
+        }
+    }
+    
+    import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+    
+    const plot = Plot.lineY(data, {x: "step", y: "value", stroke: "tag"}).plot({y: {grid: true}})
+    
+    const div = document.querySelector("#myplot");
+    div.append(plot);
+</script>
+<h1>My First Heading</h1>
+
+<p>My first paragraph.</p>
+<div id="myplot"></div>
+
+</body>
+</html>
+
