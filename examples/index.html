@@ -1,30 +1,78 @@
 <!DOCTYPE html>
 <html>
 <body>
-<script src="../dist/bundle.js"></script>
+<div id="myplot"></div>
+</body>
 <script type="module">
-    let file = await fetch("https://huggingface.co/marieke93/MiniLM-evidence-types/resolve/main/runs/bs32_lr2e-5/events.out.tfevents.1654626971.968b1e06c6a3.78.28");
-    let iter = tfevents.ScalarsIterator(tfevents.TFEventStreamIterator(file.body));
-    let data = []
-    
-    for await (const event of iter) {
-        if (event.tag == "train/loss") {
-            data.push(event);
-        }
-    }
-    
+    import * as hfhub from "https://esm.sh/@huggingface/hub"
+    import * as tfevents from "https://unpkg.com/@dfalbel/tfevents@0.0.3/dist/index.js"
     import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
     
-    const plot = Plot.lineY(data, {x: "step", y: "value", stroke: "tag"}).plot({y: {grid: true}})
+    let params = new URLSearchParams(window.location.search);
+    let repo = params.get("repo");
+    let path = params.get("path");
+
+    if (!repo) {
+        document.querySelector("#myplot").append("No repo specified");
+    }
+
+    if (!path) {
+        path = "runs";
+    }
+
+    let event_files = [];
+    let ev_files = await hfhub.listFiles({
+        "repo": repo, 
+        "recursive": true,
+        "path": path
+    });
+
+    console.log("files", ev_files)
+    
+    async function* grab_scalars (files) {
+        for await (let f of files) {
+            console.log(f);
+            if (f.path.search("events.out.tfevents") < 0) {
+                continue;
+            }
+
+            let d = await hfhub.downloadFile({
+                "repo": repo,
+                "path": f.path
+            });
+
+            let iter = tfevents.ScalarsIterator(tfevents.TFEventStreamIterator(d.body));
+            for await (const event of iter) {
+                event["path"] = f.path.split("/").slice(0, -1).join("/");
+                yield event;
+            }
+        }
+    }
+
+    let iter = grab_scalars(ev_files);
+    let data = {}
+    for await (const event of iter) {
+        let tag = event.tag
+        if (!data[tag]) {
+            data[tag] = []
+        }
+        data[tag].push(event)
+    }
+
+    if (Object.keys(data).length == 0) {
+        document.querySelector("#myplot").append("No data found")
+    }
     
     const div = document.querySelector("#myplot");
-    div.append(plot);
+
+    for (let tag of Object.keys(data)) {
+        const plot = Plot.
+                lineY(data[tag], {x: "step", y: "value", stroke: "path", tip: true}).
+                plot({y: {grid: true}})
+        
+        div.append(tag)
+        div.append(plot);
+    }
 </script>
-<h1>My First Heading</h1>
-
-<p>My first paragraph.</p>
-<div id="myplot"></div>
-
-</body>
 </html>
 

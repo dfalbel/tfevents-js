@@ -1,5 +1,4 @@
 import { Event } from "./proto/event";
-import { ScalarPluginData } from "./proto/plugins/scalar/plugin_data";
 import { Summary } from "./proto/summary";
 
 interface ScalarsIteratorResult {
@@ -58,7 +57,10 @@ export function TFEventStreamParser () {
         transform(chunk: Uint8Array, controller) {
             
             if (remainder.length > 0) {
-                chunk = Buffer.concat([remainder, chunk]);
+                var out = new Uint8Array(remainder.length + chunk.length);
+                out.set(remainder);
+                out.set(chunk, remainder.length);
+                chunk = out;
                 remainder = new Uint8Array(0);
             }
 
@@ -72,7 +74,8 @@ export function TFEventStreamParser () {
                     break;
                 }
 
-                let length = Buffer.from(chunk.subarray(pos, pos+8)).readBigInt64LE(0);
+                
+                let length = new DataView(chunk.buffer).getBigInt64(pos, true);
 
                 // check if we can read the whole event, if we can't then we need to wait for more data
                 let messageLength =  8 + 4 + Number(length) + 4;
